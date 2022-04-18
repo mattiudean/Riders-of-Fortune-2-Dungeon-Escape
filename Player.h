@@ -85,6 +85,37 @@ public:
 |. . . - - - END OF PLAYER CLASS - - - . . .  |
 *____________________________________________*/
 
+class Enemy {
+private:
+    int hp, damage;
+    std::string name = "Monster";
 
+public:
 
+    Enemy() {};
+
+    int getHP() { return hp; };
+    int getDamage() { return damage; };
+    std::string getName() { return name; };
+    void setHP(int newHP) { hp = newHP; };
+    void constructHP(int);
+
+    virtual int attack(Player);
+
+    friend class Reaper;
+};
+
+class Reaper : public Enemy {
+
+    // Reaper has access to Enemy's private members and initializes the same
+    // way. 
+
+public:
+
+    Reaper() {
+        name = "Raging Reaper";
+    }
+
+    int attack(Player);
+};
 
