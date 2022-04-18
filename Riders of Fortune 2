@@ -1,6 +1,6 @@
             
             /*_________---======================---_________.
-            |                  : ROF 2 :                    |
+            |           : ROF 2: ELECTRIC BOOGALOO :        |
             |                                               |
             |   > - - - - Game by Mattia Iudean - - - - <   |
             |                                               |
@@ -17,6 +17,8 @@
 #include <stdlib.h>
 #include <cmath>
 #include <fstream>
+#include <stack>
+#include <array>
 #include "Player.h"
 
 using namespace std;
@@ -38,10 +40,12 @@ char gameBoard[ROWS][COLUMNS];
 
 Player player;
 
-struct Weapon fists, crossbow, flail,
+struct Weapon knife, crossbow, flail,
     broadSword, morningStar, holyStaff;
 
 vector<Weapon> weaponCollection;
+stack<Weapon> blacksmithStack;
+vector<int> numTurns;
 
 fstream savedGame;
 
@@ -52,7 +56,7 @@ struct GameSave
 
     string equippedWeapon = "Fists";
 
-    std::vector<Weapon> weaponVect{ fists };
+    std::vector<Weapon> weaponVect{ knife };
 
     string inventory[base];
 
@@ -124,6 +128,8 @@ void combat();
 void graveyard();
 void cathedral();
 void well();
+void lakeOfDespair();
+void blacksmith();
 
 void invalidAction();
 void titleScreen();
@@ -132,7 +138,9 @@ void titleScreen();
 
 void initializeWeapons();
 void assignSpaces();
+void setConstantLocations();
 void setMap();
+void printMap();
 
                           // - - - game save - - - \\
 
@@ -166,45 +174,48 @@ int main()
         {
             int choice = getChoice();
 
-            if (choice >= 0 && choice < 6)
-            {
-                switch (choice)
+                if (choice >= 0 && choice < 5)
                 {
-                case 1:
-                    changePosition();
-                    break;
+                    switch (choice)
+                    {
+                    case 0:
+                        break;
 
-                case 2:
-                    dismount();
-                    break;
+                    case 1:
+                        changePosition();
+                        break;
 
-                case 3:
-                    saveGame();
-                    coloredText("\nGame saved!\n\n", 2);
+                    case 2:
+                        dismount();
+                        break;
 
-                    coloredText("\nPress any key...\n\n", 14);
+                    case 3:
+                        saveGame();
+                        coloredText("\nGame saved!\n\n", 2);
 
-                    _getch();
+                        coloredText("\nPress any key...\n\n", 14);
 
-                    running = false;
-                    gotChoice = true;
-                    break;
+                        _getch();
 
-                case 4:
-                    showInventory();
-                    break;
+                        running = false;
+                        gotChoice = true;
+                        break;
+
+                    case 4:
+                        showInventory();
+                        break;
+                    }
                 }
-            }
 
-            else
-            {
-                invalidAction();
-            }
+                else
+                {
+                    invalidAction();
+                }
 
-            if (gameWon || gameLost)
-            {
-                gameOver();
-            }
+                if (gameWon || gameLost)
+                {
+                    gameOver();
+                }   
         }
     }
     
@@ -291,11 +302,13 @@ void setMaxCounter(int itemNumber)
 
 void initializeWeapons()
 {
+    setConstantLocations();
+
     // weapon objects are initialized with their values, and random spaces that are either a 
     // monster, item, or empty are replaced with weapons.
 
-    fists.attack = 2;
-    fists.name = "Fists";
+    knife.attack = 2;
+    knife.name = "Knife";
 
     crossbow.attack = 3;
     crossbow.name = "Crossbow";
@@ -337,7 +350,8 @@ void initializeWeapons()
         randomX = randomNumber(0, 7);
         randomY = randomNumber(0, 7);
 
-        if (gameBoard[randomX][randomY] == 'm' || gameBoard[randomX][randomY] == 'i' || gameBoard[randomX][randomY] == '.')
+        if ((gameBoard[randomX][randomY] == 'm' || gameBoard[randomX][randomY] == 'i' || gameBoard[randomX][randomY] == '.') 
+            && (randomX != 0 && randomY != 0) && (gameBoard[randomX][randomY] != 'B' && gameBoard[randomX][randomY] != 'L'))
         {
             if (randomX == 0 || randomY == 0 || randomX == 7 || randomY == 7)
             {
@@ -413,7 +427,7 @@ void initializeWeapons()
 
     // default weapon 
 
-    weaponCollection.push_back(fists);
+    weaponCollection.push_back(knife);
 }
 
 void populateGameState(GameSave &myGameSave)
@@ -440,14 +454,6 @@ void populateGameState(GameSave &myGameSave)
     for (int i = 0; i < currentSize; i++)
     {
         myGameSave.inventory[i] = bag[i];
-    }
-
-    for (int x = 0; x < ROWS; x++)
-    {
-        for (int y = 0; y < COLUMNS; y++)
-        {
-            myGameSave.gameBoard[x][y] = gameBoard[x][y];
-        }
     }
 
     cout << " " << myGameSave.HP << "\n";
@@ -488,14 +494,6 @@ void loadState(GameSave &loadedSave)
     for (int i = 0; i < currentSize; i++)
     {
         bag[i] = loadedSave.inventory[i];
-    }
-
-    for (int x = 0; x < ROWS; x++)
-    {
-        for (int y = 0; y < COLUMNS; y++)
-        {
-            gameBoard[x][y] = loadedSave.gameBoard[x][y];
-        }
     }
 
     cout << " HP: " << loadedSave.HP << "\n";
@@ -627,6 +625,17 @@ void titleScreen()
 int getChoice()
 {
     //_______________________________________
+
+    // add one to the number of turns for each item
+    // stored by the blacksmith
+
+    if (!numTurns.empty()) {
+        for (int i = 0; i < blacksmithStack.size(); i++) {
+            numTurns[i] += 1;
+        }
+    }
+
+    //_______________________________________
     
     // turn
 
@@ -719,22 +728,6 @@ int getChoice()
         
     cout << player.getWeaponName() << "\n";
 
-    // ______________________________________
-    
-    // inventory
-
-    //showInventory();
-
-    if (player.getAlignment() == true)
-    {
-        coloredText("\n-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-\n", 9);
-    }
-
-    else
-    {
-        coloredText("\n-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-\n", 12);
-    }
-
     /*____________________________________________________________________________________.
     |                                                                                     |
     |   the player's choice is taken is a char so that the '>' and '<' can be properly    |
@@ -746,18 +739,19 @@ int getChoice()
 
     char menuChoice;
     int menuNumber = 0;
+    bool out = false;
 
     cout << "\n => 1 - Roll\n => 2 - Dismount\n => 3 - Save Game\n";
     cout << " => 4 - Open inventory\n";
 
-    if (currentSize > 5)
+    if (player.getAlignment() == true)
     {
-        cout << "=> > - Next inventory page\n";
+        coloredText("\n-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-\n", 9);
+    }
 
-        if (maxCounter > 5)
-        {
-            cout << "=> < - Previous inventory page\n";
-        }
+    else
+    {
+        coloredText("\n-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-\n", 12);
     }
 
     if (isMonster && !alreadyDismounted)
@@ -771,7 +765,7 @@ int getChoice()
 
     cin >> menuChoice;
 
-    cout << "\n";
+    cout << "\n";    
 
     if (menuChoice == '>')
     {
@@ -783,39 +777,36 @@ int getChoice()
         invItem -= 5;
     }
 
-    else
+    switch (menuChoice)
     {
-        switch (menuChoice)
-        {
-        case '1':
-            menuNumber = 1;
-            break;
+    case '1':
+        menuNumber = 1;
+        break;
 
-        case '2':
-            menuNumber = 2;
-            break;
+    case '2':
+        menuNumber = 2;
+        break;
 
-        case '3':
-            menuNumber = 3;
-            break;
+    case '3':
+        menuNumber = 3;
+        break;
 
-        case '4':
-            menuNumber = 4;
-            break;
+    case '4':
+        menuNumber = 4;
+        break;
 
-        case '5':
-            menuNumber = 5;
-            break;
-        }
+    case '5':
+        menuNumber = 5;
+        break;
     }
-
-    gotChoice = true;
 
     turn++;
 
     player.setTurn(turn);
 
     return menuNumber;
+
+    gotChoice = true;
 };
 
 void showInventory()
@@ -835,7 +826,7 @@ void showInventory()
 
     setMaxCounter(invItem);
 
-    coloredText("\n        Inventory: \n", 2);
+    coloredText("        Inventory: \n", 2);
 
     for (invItem; invItem < maxCounter; invItem++)
     {
@@ -845,251 +836,239 @@ void showInventory()
     int pageNumber = maxCounter / 5;
     int totalPages = currentSize / 5;
 
-    cout << "        Page " << pageNumber << " of " << totalPages << "\n";
+    cout << "        Page " << pageNumber << " of " << totalPages << "\n\n";
 
     invItem -= 5;
-
 } 
 
 void combat()
 {
+    Enemy* monster;
+
+    int enemyRoll = randomNumber(1, 2);
+
+    if (enemyRoll == 1) {
+        monster = new Enemy();
+    }
+
+    else {
+        monster = new Reaper();
+    }
+
     int monsterDead = false;
     int collectionSize = weaponCollection.size();
     string weaponImmunity;
 
+    int playerHP = player.getHP();
+    int playerXP = player.getXP();
+    int chosenWeapon, playerAttack, combatChoice, damageRoll;
+
+    bool usedPotion = false;
+    bool monsterImmune = false;
+
+    // monster's HP scales with the player's XP, so if the player has
+    // 1 XP, the monster may have between 1 and 5 HP, if they have 2,
+    // it has between 1 and 10, and so on.
+
+    monster->constructHP(playerXP);
+    int monsterHP = monster->getHP();
+
+    // weapon monster is immune to is decided by randomly choosing one
+    // of the weapons in the player's collection. if the player only
+    // has one weapon, the interaction does not play. the player is 
+    // prompted to switch the weapon that the monster is immune to.
+
+    int randomWeapon = randomNumber(1, collectionSize);
+
+    if (collectionSize > 1)
+    {
+        weaponImmunity = weaponCollection[randomWeapon - 1].name;
+
+        cout << "\n" << monster->getName() << " is immune to " << weaponImmunity << "\n";
+    }
+
+    cout << "\n1. ";
+
+    coloredText("Attack", 12);
+
+    cout << "\n2. ";
+
+    coloredText("Use item", 2);
+
+    cout << "\n\n";
+
+    cin >> combatChoice;
+
+    switch (combatChoice)
+    {
+    case 1:
+
+        coloredText("\n Weapon collection: \n ", 2);
+
+        for (int i = 0; i < collectionSize; ++i)
+        {
+            cout << i + 1 << ". " << weaponCollection[i].name << "\n ";
+        }
+
+        cout << "\n => Input weapon number to equip.\n\n";
+
+        cin >> chosenWeapon;
+
+        player.setWeapon(weaponCollection[chosenWeapon - 1]);
+
+        SetConsoleTextAttribute(screen, 2);
+
+        cout << "\n Equipped the " << player.getWeaponName();
+
+        SetConsoleTextAttribute(screen, 7);
+
+        cout << "\n You now have " << player.getWeaponAttack()
+                << " damage.\n";
+
         while (!monsterDead)
         {
-            int chosenWeapon;
-            int playerXP = player.getXP();
-            int monsterHP, multiplier, playerAttack,
-                combatChoice, damageRoll;
-            bool usedPotion = false;
-            bool monsterImmune = false;
 
-            // monster's HP scales with the player's XP, so if the player has
-            // 1 XP, the monster may have between 1 and 5 HP, if they have 2,
-            // it has between 1 and 10, and so on.
+            SetConsoleTextAttribute(screen, 2);
 
-            multiplier = playerXP * 5;
+            cout << "\n Player HP: " << playerHP;
 
-            monsterHP = randomNumber(1, multiplier);
+            SetConsoleTextAttribute(screen, 12);
 
-            // weapon monster is immune to is decided by randomly choosing one
-            // of the weapons in the player's collection. if the player only
-            // has one weapon, the interaction does not play. the player is 
-            // prompted to switch the weapon that the monster is immune to.
+            cout << "\n " << monster->getName() << " HP: " << monsterHP << "\n";
 
-            int randomWeapon = randomNumber(1, collectionSize);
+            SetConsoleTextAttribute(screen, 7);
 
-            weaponImmunity = weaponCollection[randomWeapon - 1].name;
-
-            if (collectionSize > 1)
+            if (weaponImmunity == player.getWeaponName())
             {
-                cout << "\nMonster is immune to " << weaponImmunity << "\n";
+                monsterImmune = true;
             }
 
-            cout << "\n1. ";
-
-            coloredText("Attack", 12);
-
-            cout << "\n2. ";
-
-            coloredText("Use item", 2);
-
-            cout << "\n\n";
-
-            cin >> combatChoice;
-
-            switch (combatChoice)
+            if (collectionSize == 1)
             {
-            case 1:
+                monsterImmune = false;
+            }
 
-                coloredText("\n Weapon collection: \n ", 2);
+            if (!monsterImmune)
+            {
+                // Player can roll a 10 max to ensure they don't one shot 
+                // the monsters without a powerful weapon. The monster's 
+                // attack is a random number with its HP as a max.
+                // As it is wounded, it becomes weaker. As the player gets
+                // stronger, the monsters do as well, although that comes 
+                // with the price of weaker monsters in early game.
 
-                for (int i = 0; i < collectionSize; ++i)
+                damageRoll = randomNumber(1, 10);
+                playerAttack = player.weaponDamage(player.getWeapon(), damageRoll);
+
+                cout << "\n > Rolled a " << damageRoll << ". You attack for "
+                    << playerAttack << "!\n";
+
+                monsterHP -= playerAttack;
+                monster->setHP(monsterHP);
+            }
+
+            else
+            {
+                while (monsterImmune)
                 {
-                    cout << i + 1 << ". " << weaponCollection[i].name << "\n ";
-                }
+                    cout << "\n Monster is immune to the " << weaponImmunity << "!\n";
 
-                cout << "\n => Input weapon number to equip.\n\n";
+                    cout << " Choose another weapon: \n ";
 
-                cin >> chosenWeapon;
-
-                player.setWeapon(weaponCollection[chosenWeapon - 1]);
-
-                SetConsoleTextAttribute(screen, 2);
-
-                cout << "\n Equipped the " << player.getWeaponName();
-
-                SetConsoleTextAttribute(screen, 7);
-
-                cout << "\n > You now have " << player.getWeaponAttack()
-                     << " damage.\n";
-
-                while (!monsterDead)
-                {
-                    int playerHP = player.getHP();
-
-                    SetConsoleTextAttribute(screen, 2);
-
-                    cout << "\n Player HP: " << playerHP;
-
-                    SetConsoleTextAttribute(screen, 12);
-
-                    cout << "\n Monster HP: " << monsterHP << "\n";
-
-                    SetConsoleTextAttribute(screen, 7);
-
-                    // Player can roll a 10 max to ensure they don't one shot 
-                    // the monsters without a powerful weapon. The monster's 
-                    // attack is a random number with its HP as a max.
-                    // As it is wounded, it becomes weaker. As the player gets
-                    // stronger, the monsters do as well, although that comes 
-                    // with the price of weaker monsters in early game.
-
-                    damageRoll = randomNumber(1, 10);
-                    playerAttack = player.weaponDamage(player.getWeapon(), damageRoll);
-
-                    cout << "\n > Rolled a " << damageRoll << ". You attack for " 
-                         << playerAttack << "!\n";
-
-                    if (weaponImmunity == player.getWeaponName())
+                    for (int i = 0; i < collectionSize; ++i)
                     {
-                        monsterImmune = true;
+                        cout << i + 1 << ". " << weaponCollection[i].name << "\n ";
                     }
 
-                    if (collectionSize == 1)
+                    cin >> chosenWeapon;
+
+                    player.setWeapon(weaponCollection[chosenWeapon - 1]);
+
+                    if (weaponImmunity != player.getWeaponName())
                     {
                         monsterImmune = false;
-                    }
 
-                    if (!monsterImmune)
-                    {
-                        monsterHP -= playerAttack;
-                    }
+                        SetConsoleTextAttribute(screen, 2);
 
-                    else
-                    {
-                        while (monsterImmune)
-                        {
-                            cout << "\n Monster is immune to the " << weaponImmunity << "!\n";
+                        cout << "\n Equipped the " << player.getWeaponName();
 
-                            cout << " Choose another weapon: \n ";
+                        SetConsoleTextAttribute(screen, 7);
 
-                            for (int i = 0; i < collectionSize; ++i)
-                            {
-                                cout << i + 1 << ". " << weaponCollection[i].name << "\n ";
-                            }
-
-                            cin >> chosenWeapon;
-
-                            player.setWeapon(weaponCollection[chosenWeapon - 1]);
-
-                            if (weaponImmunity != player.getWeaponName())
-                            {
-                                monsterImmune = false;
-
-                                SetConsoleTextAttribute(screen, 2);
-
-                                cout << "\n Equipped the " << player.getWeaponName();
-
-                                SetConsoleTextAttribute(screen, 7);
-
-                                cout << "\n > You now have " << player.getWeaponAttack()
-                                    << " damage.\n";
-                            }
-                        }
-                    }
-
-                    if (monsterHP <= 0)
-                    {
-                        int currentXP = player.getXP();
-                        double addedXP;
-                        int newXP;
-
-                        addedXP = currentXP * 0.3;
-
-                        addedXP += 0.7;
-
-                        static_cast<int>(addedXP);
-
-                        newXP = addedXP + currentXP;
-
-                        static_cast<int>(newXP);
-
-                        player.setXP(newXP);
-
-                        coloredText("\n You have slain the monster!\n", 2);
-
-                        cout << "+ " << addedXP << " XP!\n\n";
-
-                        monsterDead = true;
-                        alreadyDismounted = true;
-                    }
-
-                    else
-                    {
-                    SetConsoleTextAttribute(screen, 2);
-
-                    cout << "\n Player HP: " << playerHP;
-
-                    SetConsoleTextAttribute(screen, 12);
-
-                    cout << "\n Monster HP: " << monsterHP << "\n";
-
-                    SetConsoleTextAttribute(screen, 7);
-
-                    int monsterAttack = randomNumber(1, monsterHP);
-
-                    cout << "\n > Monster attacks you for " << monsterAttack 
-                         << "!\n";
-
-                    playerHP -= monsterAttack;
-
-                    player.setHP(playerHP);
-                    }
-
-                    if (playerHP <= 0)
-                    {
-                        gameLost = true;
+                        cout << "\n > You now have " << player.getWeaponAttack()
+                            << " damage.\n";
                     }
                 }
-                break;
+            }
 
-            case 2:
+            if (monsterHP <= 0)
+            {
+                int currentXP = player.getXP();
+                double addedXP;
+                int newXP;
 
-                // if player's HP is under 100, a for loop iterates through
-                // each item in their bag until it finds a potion, after which
-                // it replaces the spot with an empty space and applies it to 
-                // the player's health.
+                addedXP = currentXP * 0.3;
 
-                if (player.getHP() < 100)
-                {
-                    for (int i = 0; i < currentSize; i++)
-                    {
-                        if (bag[i] == potion)
-                        {
-                            bag[i] = "         -";
+                addedXP += 0.7;
 
-                            player.useItem(potion);
+                newXP = addedXP + currentXP;
 
-                            cout << "\n You drink the potion and very quickly"
-                                 << " begin to feel its effects!\n + 10 HP\n";
+                static_cast<int>(newXP);
 
-                            usedPotion = true;
-                        }
-                    }
-                }
+                player.setXP(newXP);
 
-                else
-                {
-                    cout << "\nYou are already at max health!\n\n";
-                }
-                break;
+                coloredText("\n You have slain the monster!\n", 2);
+
+                cout << "+ " << static_cast<int>(addedXP) << " XP!\n\n";
+
+                monsterDead = true;
+                alreadyDismounted = true;
+            }
+
+            else {
+                player.setHP(monster->attack(player));
+            }
+
+            if (playerHP <= 0)
+            {
+                gameLost = true;
             }
         }
 
-        printMap();
+        break;
+
+    case 2:
+
+        // if player's HP is under 100, a for loop iterates through
+        // each item in their bag until it finds a potion, after which
+        // it replaces the spot with an empty space and applies it to 
+        // the player's health.
+
+        if (playerHP < 100)
+        {
+            for (int i = 0; i < currentSize; i++)
+            {
+                if (bag[i] == potion)
+                {
+                    bag[i] = "         -";
+
+                    player.useItem(potion);
+
+                    cout << "\n You drink the potion and very quickly"
+                            << " begin to feel its effects!\n + 10 HP\n";
+
+                    usedPotion = true;
+                }
+            }
+        }
+
+        else
+        {
+            cout << "\nYou are already at max health!\n\n";
+        }
+        break;
+    }
+
+printMap();
 }
 
 void printMap()
@@ -1148,6 +1127,14 @@ void printMap()
                 SetConsoleTextAttribute(screen, 2);
             }
 
+            else if (gameBoard[x][y] == 'B') {
+                SetConsoleTextAttribute(screen, FOREGROUND_RED | FOREGROUND_GREEN);
+            }
+            
+            else if (gameBoard[x][y] == 'L') {
+                SetConsoleTextAttribute(screen, FOREGROUND_BLUE);
+            }
+
             cout << gameBoard[x][y];
 
             SetConsoleTextAttribute(screen, 7);
@@ -1162,34 +1149,23 @@ void setMap()
 {
     // whereas printMap() outputs the map, setMap() sets each element of the 
     // array.
-    
-    // declaring all the set locations
 
-    gameBoard[0][4] = 'W';            
-    gameBoard[7][4] = 'W';            
+    setConstantLocations();
 
-    gameBoard[0][7] = 'C';
-    gameBoard[7][7] = 'C';
-
-    gameBoard[7][0] = 'G';
-    gameBoard[3][7] = 'G';
-
-    gameBoard[3][0] = 'E';
-
-    //Use two loops to draw the game board. If the passed in player position matches
-    //a position, place a P on it.
+    // two loops draw the game board. if the passed in player position matches
+    // a position, place a P on it.
     for (int x = 0; x < ROWS; x++)
     {
         for (int y = 0; y < COLUMNS; y++)
         {
-            //The board representation will be drawn with * only if is the outer paths
-            //of the 2D Array
+            // board representation will be drawn with * only if is the outer paths
+            // of the 2D Array
 
             if (x == player.getPosX() && y == player.getPosY())
             {
                 gameBoard[x][y] = 'P';
             }
-
+            
             else if (x == crossbow.posX && y == crossbow.posY)
             {
                 gameBoard[x][y] = 'c';
@@ -1281,6 +1257,32 @@ void assignSpaces()
                 }
         }
     }
+}
+
+void setConstantLocations() {
+
+    // declaring all the set locations
+
+    gameBoard[0][1] = 'L';
+    gameBoard[1][7] = 'L';
+    gameBoard[6][0] = 'L';
+    gameBoard[7][6] = 'L';
+
+    gameBoard[0][4] = 'W';
+    gameBoard[7][4] = 'W';
+
+    gameBoard[0][6] = 'B';
+    gameBoard[6][7] = 'B';
+    gameBoard[7][1] = 'B';
+    gameBoard[1][0] = 'B';
+
+    gameBoard[0][7] = 'C';
+    gameBoard[7][7] = 'C';
+
+    gameBoard[7][0] = 'G';
+    gameBoard[3][7] = 'G';
+
+    gameBoard[3][0] = 'E';
 }
 
 void changePosition() 
@@ -1428,9 +1430,6 @@ void changePosition()
     futureX = positionX;
     futureY = positionY;
 
-    player.setPosX(positionX);
-    player.setPosY(positionY);
-
     if (gameBoard[futureX][futureY] == 'W')
     {
         well();
@@ -1452,6 +1451,19 @@ void changePosition()
         isItem = true;
     }
 
+    else if (gameBoard[futureX][futureY] == 'L')
+    {
+        cout << "\nSuddenly, the ground trembles, and you feel the soil under your\n"
+            << "feet give way!\n";
+
+        lakeOfDespair();
+    }
+
+    else if (gameBoard[futureX][futureY] == 'B')
+    {
+        blacksmith();
+    }
+
     // if the player lands on a spot that has a weapon, they pick it up
     // and are given the option of equipping it on the spot. if they already 
     // have it, the spot is made empty and a different interaction plays out.
@@ -1463,118 +1475,136 @@ void changePosition()
         gameBoard[futureX][futureY] == 'M' ||
         gameBoard[futureX][futureY] == 'h')
     {
-        cout << "\n You come across a ";
 
-        if (gameBoard[futureX][futureY] == 'c')
-        {
-            coloredText("Crossbow", 2);
+        // try block checks if the max size is exceeded. if it is, throw an
+        // exception stating that the weapon limit is exceeded.
 
-            if (gotCrossbow)
-            {
-                cout << " but you already have one, so you keep walking.\n";
+        try {
+            if (weaponCollection.size() < 5) {
+                cout << "\n You come across a ";
+
+                if (gameBoard[futureX][futureY] == 'c')
+                {
+                    coloredText("Crossbow", 2);
+
+                    if (gotCrossbow)
+                    {
+                        cout << " but you already have one, so you keep walking.\n";
+                    }
+
+                    if (!gotCrossbow)
+                    {
+                        cout << " and stash it in your bag.\n";
+
+                        weaponCollection.push_back(crossbow);
+
+                        gotCrossbow = true;
+                    }
+                }
+
+                else if (gameBoard[futureX][futureY] == 'f')
+                {
+                    coloredText("Flail", 2);
+
+                    if (gotFlail)
+                    {
+                        cout << " but you already have one, so you keep walking.\n";
+                    }
+
+                    if (!gotFlail)
+                    {
+                        cout << " and stash it in your bag.\n";
+
+                        weaponCollection.push_back(flail);
+
+                        gotFlail = true;
+                    }
+                }
+
+                else if (gameBoard[futureX][futureY] == 'b')
+                {
+                    coloredText("Broad Sword", 2);
+
+                    if (gotBroadSword)
+                    {
+                        cout << " but you already have one, so you keep walking.\n";
+                    }
+
+                    if (!gotBroadSword)
+                    {
+                        cout << " and stash it in your bag.\n";
+
+                        weaponCollection.push_back(broadSword);
+
+                        gotBroadSword = true;
+                    }
+                }
+
+                else if (gameBoard[futureX][futureY] == 'M')
+                {
+                    coloredText("Morning Star", 2);
+
+                    if (gotStar)
+                    {
+                        cout << " but you already have one, so you keep walking.\n";
+                    }
+
+                    if (!gotStar)
+                    {
+                        cout << " and stash it in your bag.\n";
+
+                        weaponCollection.push_back(morningStar);
+
+                        gotStar = true;
+                    }
+                }
+
+                else if (gameBoard[futureX][futureY] == 'h')
+                {
+                    coloredText("Holy Staff", 2);
+
+                    if (gotStaff)
+                    {
+                        cout << " but you already have one, so you keep walking.\n";
+                    }
+
+                    if (!gotStaff)
+                    {
+                        cout << " and stash it in your bag.\n";
+
+                        weaponCollection.push_back(holyStaff);
+
+                        gotStaff = true;
+                    }
+                }
+
+                coloredText("\n Press 1 to equip or 2 to continue...\n", 14);
+
+                int num;
+
+                cin >> num;
+
+                if (num == 1)
+                {
+                    player.setWeapon(weaponCollection.back());
+
+                    cout << "\n Equipped ";
+
+                    SetConsoleTextAttribute(screen, 14);
+
+                    cout << player.getWeaponName();
+                }
             }
 
-            if (!gotCrossbow)
-            {
-                cout << " and stash it in your bag.\n";
-
-                weaponCollection.push_back(crossbow);
-
-                gotCrossbow = true;
+            else {
+                throw "\n You come across a weapon, but you've exceeded your limit\n";
             }
         }
+        
+        catch (const std::string weaponsExceeded) {
+                cout << weaponsExceeded;
 
-        else if (gameBoard[futureX][futureY] == 'f')
-        {
-            coloredText("Flail", 2);
-
-            if (gotFlail)
-            {
-                cout << " but you already have one, so you keep walking.\n";
-            }
-
-            if (!gotFlail)
-            {
-                cout << " and stash it in your bag.\n";
-
-                weaponCollection.push_back(flail);
-
-                gotFlail = true;
-            }
-        }
-
-        else if (gameBoard[futureX][futureY] == 'b')
-        {
-            coloredText("Broad Sword", 2);
-
-            if (gotBroadSword)
-            {
-                cout << " but you already have one, so you keep walking.\n";
-            }
-
-            if (!gotBroadSword)
-            {
-                cout << " and stash it in your bag.\n";
-
-                weaponCollection.push_back(broadSword);
-
-                gotBroadSword = true;
-            }
-        }
-
-        else if (gameBoard[futureX][futureY] == 'M')
-        {
-            coloredText("Morning Star", 2);
-
-            if (gotStar)
-            {
-                cout << " but you already have one, so you keep walking.\n";
-            }
-
-            if (!gotStar)
-            {
-                cout << " and stash it in your bag.\n";
-
-                weaponCollection.push_back(morningStar);
-
-                gotStar = true;
-            }
-        }
-
-        else if (gameBoard[futureX][futureY] == 'h')
-        {
-            coloredText("Holy Staff", 2);
-
-            if (gotStaff)
-            {
-                cout << " but you already have one, so you keep walking.\n";
-            }
-
-            if (!gotStaff)
-            {
-                cout << " and stash it in your bag.\n";
-
-                weaponCollection.push_back(holyStaff);
-
-                gotStaff = true;
-            }
-        }
-
-        coloredText("\n Press 1 to equip or 2 to continue...\n", 14);
-
-        int num;
-
-        cin >> num;
-
-        if (num == 1)
-        {
-            player.setWeapon(weaponCollection.back());
-
-            cout << "\n Equipped ";
-
-            SetConsoleTextAttribute(screen, 14);
-
-            cout << player.getWeaponName();
+                return;
         }
     }
 
@@ -1595,13 +1625,16 @@ void changePosition()
             player.useItem(magicRelic);
         }
 
-        else if (gotRelic)
+        else if (gotRelic && player.getXP() > 19)
         {
             player.useItem(magicRelic);
 
             gameWon = true;
         }
     }
+
+    player.setPosX(positionX);
+    player.setPosY(positionY);
 
     gotChoice = false;
 
@@ -1707,7 +1740,7 @@ void cathedral()
             player.setHP(convertedHP);
 
             cout << "\n You step into the cathedral and approach the altar"
-                 << " inside the massive chamber. The Gods smile upon you"
+                 << " inside the massive chamber.\n The Gods smile upon you"
                  << " today, Yarra.\n";
 
             SetConsoleTextAttribute(screen, 11);
@@ -1797,6 +1830,164 @@ void well()
     coloredText("\nPress any key...\n\n", 14);
 
     _getch();
+}
+
+void lakeOfDespair() {
+
+    int number = randomNumber(1, 6);
+
+    cout << "\n You've fallen into the Lake of Despair! Press any key to roll.\n";
+
+    _getch();
+
+    cout << " Rolled a " << number << "\n";
+
+    if (number == 3 || number == 6)
+    {
+        return;
+    }
+
+    else
+    {
+        cout << "\n You thrash around and struggle to escape, but the waters\n"
+            << " hold strong. Your vision begins to grow blurry...\n";
+
+        coloredText(" - 10 HP!\n", 12);
+
+        player.setHP(player.getHP() - 10);
+
+        if (player.getHP() < 1) {
+            gameLost = true;
+            gameOver();
+        }
+
+        else {
+            lakeOfDespair();
+        }
+    }
+}
+
+void blacksmith() {
+
+    int choice;
+
+    cout << "\n Out of the corner of your eye, you spot a shabby wagon rolling"
+        << "\n its way toward you. As it stops and an old man hobbles out,"
+        << "\n you recognize him as the Blacksmith.\n";
+
+    if (!blacksmithStack.empty()) {
+        cout << "\n You've left behind";
+
+        if (blacksmithStack.size() == 1) {
+            cout << " a weapon.";
+        }
+
+        else {
+            cout << " several weapons.";
+        }
+
+        cout << "\n Withdraw?";
+
+        cout << "\n => 1 - Yes"
+             << "\n => 2 - No\n\n";
+
+        cin >> choice;
+
+        if (choice == 1) {
+
+            blacksmithStack.top().attack += numTurns.back();
+
+            weaponCollection.push_back(blacksmithStack.top());
+
+            cout << "\n Withdrew the ";
+
+            SetConsoleTextAttribute(screen, 2);
+
+            cout << blacksmithStack.top().name;
+
+            SetConsoleTextAttribute(screen, 7);
+            
+            cout << " , which has accumulated an additional " << numTurns.back()
+                << " attack,\n for a total of " << blacksmithStack.top().attack << "\n";
+
+            blacksmithStack.pop();
+
+            numTurns.pop_back();
+
+        }
+    }
+
+    if (weaponCollection.size() > 1) {
+
+        if (blacksmithStack.size() <= 3) {
+
+            coloredText("\n Care for my services?", 14);
+
+            cout << "\n => 1 - Yes [";
+            
+            coloredText(" Leave a weapon ", 2);
+
+            cout << "]\n"
+                 << " => 2 - No\n";
+
+            cin >> choice;
+
+            if (choice == 1) {
+
+                cout << "\n What weapon?\n ";
+
+                for (int i = 0; i < weaponCollection.size(); ++i)
+                {
+                    cout << i + 1 << ". ";
+                    
+                    SetConsoleTextAttribute(screen, 2);
+
+                    cout << weaponCollection[i].name << "\n ";
+
+                    SetConsoleTextAttribute(screen, 7); 
+                }
+
+                cout << endl;
+
+                cin >> choice;
+
+                // adds the weapon chosen to the stack
+
+                blacksmithStack.push(weaponCollection[choice - 1]);
+
+                numTurns.push_back(0);
+
+                // erases the weapon chosen from the player's weapon collection
+
+                weaponCollection.erase(weaponCollection.begin() + (choice - 1));
+
+                player.setWeapon(weaponCollection[weaponCollection.size()]);
+
+                cout << "\n Left behind ";
+                
+                SetConsoleTextAttribute(screen, 2); 
+                
+                cout << blacksmithStack.top().name << "\n";
+
+                SetConsoleTextAttribute(screen, 7);
+
+                
+            }
+
+            else {
+                return;
+            }
+
+        }
+
+        else {
+            coloredText("\n I'm all out of space!\n", 14);
+        }
+    }
+
+    else {
+        cout << "\n You don't have enough weapons to leave one behind.\n";
+    }
 }
 
 int randomNumber(int low, int high)
