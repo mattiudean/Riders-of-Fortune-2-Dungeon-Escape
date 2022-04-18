@@ -13,7 +13,7 @@ void Player::setAlignment(bool newAlignment)
     {
         alignment = evil;
     }
-};
+}
 
 bool Player::changeAlignment(bool alignment)
 {
@@ -30,7 +30,7 @@ bool Player::changeAlignment(bool alignment)
         alignment = good;
         XP += 2;
     }
-};
+}
 
 void Player::useItem(std::string item)
 {
@@ -75,4 +75,61 @@ int Player::weaponDamage(Weapon weapon, int randomNumber)
     int playerAttack = randomNumber + equippedWeapon.attack;
 
     return playerAttack;
+}
+
+void Enemy::constructHP(int var) {
+
+    srand(time(NULL));
+
+    int multiplier = var * 5;
+
+    setHP(rand() % (multiplier - 1 + 1));
+}
+
+int Enemy::attack(Player obj) {
+    int playerHP = obj.getHP();
+    int playerXP = obj.getXP();
+
+    srand(time(NULL));
+
+    int multiplier = playerXP * 5;
+
+    damage = rand() % (multiplier - 1 + 1);
+
+    std::cout << "\n > Monster attacks you for " << damage
+        << "!\n";
+
+    playerHP -= damage;
+
+    return playerHP;
+}
+
+int Reaper::attack(Player obj) {
+
+    bool playerAlignment = obj.getAlignment();
+    int playerHP = obj.getHP();
+    int playerXP = obj.getXP();
+
+    srand(time(NULL));
+
+    if (playerAlignment) {
+        damage = playerHP / 2;
+    }
+
+    else {
+        double percentage;
+
+        percentage = (rand() % ((25 - 1 + 1) + 1) / 1000);
+
+        double playerHealth = playerHP;
+
+        damage = playerHealth * percentage;
+    }
+
+    std::cout << "\n > Reaper attacks you for " << damage
+        << "!\n";
+
+    playerHP -= damage;
+
+    return playerHP;
 }
